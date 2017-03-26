@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"os"
-
-	"github.com/pkg/profile"
 )
 
 const firstLetter int = 'a'
@@ -12,12 +10,12 @@ const lastLetter int = 'z'
 const nLetters int = lastLetter - firstLetter + 1
 
 type anagram struct {
-	word string
+	word []byte
 	next *anagram
 }
 
 type node struct {
-	firstAnagram string
+	firstAnagram []byte
 	nextAnagram  *anagram
 	children     [nLetters]*node
 }
@@ -33,7 +31,6 @@ func handleErr(err error) {
 }
 
 func main() {
-	defer profile.Start(profile.ProfilePath(".")).Stop()
 	process(os.Args[1], os.Args[2])
 }
 
@@ -44,7 +41,11 @@ func process(inputFilename, outputFilname string) {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		n.add(scanner.Text())
+		// must copy bytes, because can overwrite
+		b := scanner.Bytes()
+		bNew := make([]byte, len(b))
+		copy(bNew, b)
+		n.add(bNew)
 	}
 	file.Close()
 
@@ -57,14 +58,14 @@ func process(inputFilename, outputFilname string) {
 	n.write(writer)
 }
 
-func (n *node) add(word string) {
+func (n *node) add(word []byte) {
 	sorted := sort(word)
 	n = n.search(sorted)
 	n.addValue(word)
 }
 
-func (n *node) addValue(word string) {
-	if n.firstAnagram == "" {
+func (n *node) addValue(word []byte) {
+	if len(n.firstAnagram) == 0 {
 		n.firstAnagram = word
 	} else {
 		n.nextAnagram = &anagram{
@@ -88,7 +89,7 @@ func (n *node) search(sorted [nLetters]int) *node {
 	return n
 }
 
-func sort(word string) (sorted [nLetters]int) {
+func sort(word []byte) (sorted [nLetters]int) {
 	for _, r := range word {
 		sorted[int(r)-firstLetter]++
 	}
@@ -96,18 +97,15 @@ func sort(word string) (sorted [nLetters]int) {
 }
 
 func (n *node) write(writer *bufio.Writer) {
-	if n.firstAnagram != "" {
-		writer.WriteString(n.firstAnagram)
-		a := n.nextAnagram
-		if a != nil {
-			for ; a.next != nil; a = a.next {
-				writer.WriteString(a.word)
+	if len(n.firstAnagram) > 0 {
+		writer.Write(n.firstAnagram)
+		for a := n.nextAnagram; a != nil; a = a.next {
+			if len(a.word) > 0 {
 				writer.WriteRune(' ')
-			}
-			if a.word != "" {
-				writer.WriteString(a.word)
+				writer.Write(a.word)
 			}
 		}
+
 		writer.WriteRune('\n')
 	}
 
