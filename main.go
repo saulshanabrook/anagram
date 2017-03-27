@@ -3,6 +3,9 @@ package main
 import (
 	"bufio"
 	"os"
+	"runtime/debug"
+
+	"github.com/pkg/profile"
 )
 
 const firstLetter int = 'a'
@@ -31,6 +34,8 @@ func handleErr(err error) {
 }
 
 func main() {
+	debug.SetGCPercent(-1)
+	defer profile.Start(profile.ProfilePath(".")).Stop()
 	process(os.Args[1], os.Args[2])
 }
 
@@ -39,13 +44,19 @@ func process(inputFilename, outputFilname string) {
 	file, err := os.Open(inputFilename)
 	handleErr(err)
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		// must copy bytes, because can overwrite
-		b := scanner.Bytes()
-		bNew := make([]byte, len(b))
-		copy(bNew, b)
-		n.add(bNew)
+	stat, err := file.Stat()
+	handleErr(err)
+	// use reader size equal to filesize, so that bytes are not ovewritten when
+	// they are read
+	reader := bufio.NewReaderSize(file, int(stat.Size()))
+	// use reader instead of scanner so we can set buffer size and don't
+	// have to copy bytes
+	for line, isPrefix, err := reader.ReadLine(); len(line) > 0; line, isPrefix, err = reader.ReadLine() {
+		handleErr(err)
+		if isPrefix {
+			panic("is prefix!")
+		}
+		n.add(line)
 	}
 	file.Close()
 
