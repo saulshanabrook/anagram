@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"os"
 	"runtime/debug"
-
-	"github.com/pkg/profile"
 )
 
 const firstLetter int = 'a'
@@ -18,9 +16,8 @@ type anagram struct {
 }
 
 type node struct {
-	firstAnagram []byte
-	nextAnagram  *anagram
-	children     [nLetters]*node
+	anagrams *anagram
+	children [nLetters]*node
 }
 
 func makeNode() *node {
@@ -35,7 +32,7 @@ func handleErr(err error) {
 
 func main() {
 	debug.SetGCPercent(-1)
-	defer profile.Start(profile.ProfilePath(".")).Stop()
+	// defer profile.Start(profile.ProfilePath(".")).Stop()
 	process(os.Args[1], os.Args[2])
 }
 
@@ -76,13 +73,9 @@ func (n *node) add(word []byte) {
 }
 
 func (n *node) addValue(word []byte) {
-	if len(n.firstAnagram) == 0 {
-		n.firstAnagram = word
-	} else {
-		n.nextAnagram = &anagram{
-			word: word,
-			next: n.nextAnagram,
-		}
+	n.anagrams = &anagram{
+		word: word,
+		next: n.anagrams,
 	}
 }
 
@@ -108,13 +101,12 @@ func sort(word []byte) (sorted [nLetters]int) {
 }
 
 func (n *node) write(writer *bufio.Writer) {
-	if len(n.firstAnagram) > 0 {
-		writer.Write(n.firstAnagram)
-		for a := n.nextAnagram; a != nil; a = a.next {
-			if len(a.word) > 0 {
-				writer.WriteRune(' ')
-				writer.Write(a.word)
-			}
+	firstAnagram := n.anagrams
+	if firstAnagram != nil {
+		writer.Write(firstAnagram.word)
+		for a := firstAnagram.next; a != nil; a = a.next {
+			writer.WriteRune(' ')
+			writer.Write(a.word)
 		}
 
 		writer.WriteRune('\n')
