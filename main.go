@@ -10,13 +10,8 @@ const firstLetter int = 'a'
 const lastLetter int = 'z'
 const nLetters int = lastLetter - firstLetter + 1
 
-type anagram struct {
-	word []byte
-	next *anagram
-}
-
 type node struct {
-	anagrams *anagram
+	anagrams []byte
 	children [nLetters]*node
 }
 
@@ -48,6 +43,7 @@ func process(inputFilename, outputFilname string) {
 	reader := bufio.NewReaderSize(file, int(stat.Size()))
 	// use reader instead of scanner so we can set buffer size and don't
 	// have to copy bytes
+
 	for line, isPrefix, err := reader.ReadLine(); len(line) > 0; line, isPrefix, err = reader.ReadLine() {
 		handleErr(err)
 		if isPrefix {
@@ -69,14 +65,18 @@ func process(inputFilename, outputFilname string) {
 func (n *node) add(word []byte) {
 	sorted := sort(word)
 	n = n.search(sorted)
-	n.addValue(word)
+	n.addHere(word)
 }
 
-func (n *node) addValue(word []byte) {
-	n.anagrams = &anagram{
-		word: word,
-		next: n.anagrams,
+func concatWords(words, word []byte) []byte {
+	if len(words) == 0 {
+		return word
 	}
+	return append(append(words, byte(' ')), word...)
+}
+
+func (n *node) addHere(word []byte) {
+	n.anagrams = concatWords(n.anagrams, word)
 }
 
 func (n *node) search(sorted [nLetters]int) *node {
@@ -101,14 +101,8 @@ func sort(word []byte) (sorted [nLetters]int) {
 }
 
 func (n *node) write(writer *bufio.Writer) {
-	firstAnagram := n.anagrams
-	if firstAnagram != nil {
-		writer.Write(firstAnagram.word)
-		for a := firstAnagram.next; a != nil; a = a.next {
-			writer.WriteRune(' ')
-			writer.Write(a.word)
-		}
-
+	if len(n.anagrams) > 0 {
+		writer.Write(n.anagrams)
 		writer.WriteRune('\n')
 	}
 
