@@ -6,15 +6,22 @@ import (
 	"runtime/debug"
 )
 
+// we only handle a-z
 const firstLetter int = 'a'
 const lastLetter int = 'z'
 const nLetters int = lastLetter - firstLetter + 1
 
+// node is part of a trie that holds one class of anagrams
 type node struct {
+	// anagrams holds the byte representation of the anagrams joined by spaces
 	anagrams []byte
+	// children points to all anagram classes that have the same prefix of
+	// ordered characters as this one, along with another letter.
+	// that letter, offset from "a", indexes this array
 	children [nLetters]*node
 }
 
+// makeNode creates a blank node
 func makeNode() *node {
 	return &node{}
 }
@@ -26,30 +33,22 @@ func handleErr(err error) {
 }
 
 func main() {
+	// turn of garbage collection, since we memory isn't an issue here
 	debug.SetGCPercent(-1)
+
 	// defer profile.Start(profile.ProfilePath(".")).Stop()
 	process(os.Args[1], os.Args[2])
 }
 
 func process(inputFilename, outputFilname string) {
-	n := makeNode()
 	file, err := os.Open(inputFilename)
 	handleErr(err)
 
-	stat, err := file.Stat()
-	handleErr(err)
-	// use reader size equal to filesize, so that bytes are not ovewritten when
-	// they are read
-	reader := bufio.NewReaderSize(file, int(stat.Size()))
-	// use reader instead of scanner so we can set buffer size and don't
-	// have to copy bytes
-
-	for line, isPrefix, err := reader.ReadLine(); len(line) > 0; line, isPrefix, err = reader.ReadLine() {
-		handleErr(err)
-		if isPrefix {
-			panic("is prefix!")
-		}
-		n.add(line)
+	scanner := bufio.NewScanner(file)
+	n := makeNode()
+	for scanner.Scan() {
+		// copy bytes, because it reuses the bytes
+		n.add(append([]byte{}, scanner.Bytes()...))
 	}
 	file.Close()
 
@@ -62,37 +61,28 @@ func process(inputFilename, outputFilname string) {
 	n.write(writer)
 }
 
+// add adds a word to the trie, by first finding the node where it should
+// below, using it's sorted letters, then adding it there
 func (n *node) add(word []byte) {
 	sorted := sort(word)
 	n = n.search(sorted)
-	n.addHere(word)
-}
-
-func concatWords(words, word []byte) []byte {
-	if len(words) == 0 {
-		return word
-	}
-	return append(append(words, byte(' ')), word...)
-}
-
-func (n *node) addHere(word []byte) {
 	n.anagrams = concatWords(n.anagrams, word)
 }
 
+// search returns the the node corresponding to the sorted letters,
+// assuming n is the root
 func (n *node) search(sorted [nLetters]int) *node {
 	for i, nChars := range sorted {
 		for ; nChars != 0; nChars-- {
-			childNode := n.children[i]
-			if childNode == nil {
-				childNode = makeNode()
-				n.children[i] = childNode
-			}
-			n = childNode
+			n = n.child(i)
 		}
 	}
 	return n
 }
 
+// sort returns an array holding the number of each of the characters
+// in a word. The first item in the array holds the number of "a"s, the second
+// "b"s, etc.
 func sort(word []byte) (sorted [nLetters]int) {
 	for _, r := range word {
 		sorted[int(r)-firstLetter]++
@@ -100,6 +90,20 @@ func sort(word []byte) (sorted [nLetters]int) {
 	return
 }
 
+// child returns the child node associated with the ith characters
+// creating it if it doesn't exist
+func (n *node) child(i int) (childNode *node) {
+	childNode = n.children[i]
+	if childNode == nil {
+		childNode = makeNode()
+		n.children[i] = childNode
+	}
+	return
+}
+
+// write prints out all anagram classes on seperate lines
+// It uses a depth first traversal of the trie, printing each set of anagrams
+// on a line, if there are word on that node
 func (n *node) write(writer *bufio.Writer) {
 	if len(n.anagrams) > 0 {
 		writer.Write(n.anagrams)
@@ -111,4 +115,13 @@ func (n *node) write(writer *bufio.Writer) {
 			childN.write(writer)
 		}
 	}
+}
+
+// concatWords som existing words, with another word, with a space in the
+// middle. if there are not existing words, just returns the new word
+func concatWords(words, word []byte) []byte {
+	if len(words) == 0 {
+		return word
+	}
+	return append(append(words, byte(' ')), word...)
 }
